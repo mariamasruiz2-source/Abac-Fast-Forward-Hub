@@ -758,7 +758,7 @@ function renderRec(opts){
   </div>
   <div>
    <div class="seclab" style="margin-top:0">Ejemplos</div>
-   ${["Pricing dinámico e IA para Motocard, hands-on","Interim CFO para una participada industrial en integración post-adquisición","Board advisor senior de sostenibilidad / ESG","Montar la función de datos y BI desde cero en una distribuidora","Go-to-market B2B internacional para ingredientes naturales","Recruitment de un equipo digital completo"].map(e=>`<button class="ex" onclick="$('recQ').value=this.textContent;runRec()">${e}</button>`).join('')}
+   ${["CFO interim para una participada industrial","Pricing dinámico con IA para retail online, hands-on","Board advisor de sostenibilidad / ESG","Montar la función de datos y BI desde cero en una distribuidora","Go-to-market B2B internacional para ingredientes naturales","Director de operaciones para almacén y logística"].map(e=>`<button class="ex" onclick="$('recQ').value=this.textContent;runRec()">${e}</button>`).join('')}
    <div class="seclab" style="margin-top:0">Motor de IA</div>
    <div class="note" style="margin-top:0;margin-bottom:12px">
     <div style="font-size:12px;line-height:1.6">${hasCowork()?'<b style="color:#1F7A4D">Claude (Cowork) · activo.</b> Dentro de Cowork las recomendaciones ya funcionan con IA. Configura además una API key de Gemini para que el recommender funcione también al abrir el archivo compartido fuera de Cowork.':'<b>Gemini API.</b> Fuera de Cowork el recommender usa la API gratuita de Gemini. Pega tu API key para activarlo.'}<br>
@@ -796,46 +796,129 @@ async function askEngine(prompt){
  if(k)return await askGemini(prompt,k);
  throw new Error('no-engine');
 }
+const SYN={
+ commercial:['comercial','ventas','sales','pricing','precio','precios','margen','margin','gotomarket','market','crm','funnel','conversion','clientes','cliente','revenue','ingresos','facturacion','kam','distribucion','canal','retencion','churn','fidelizacion','cro','cco'],
+ ops:['operaciones','operativa','operational','almacen','warehouse','wms','logistica','logistic','supply','sop','planificacion','demanda','demand','produccion','planta','fabrica','manufacturing','coste','costes','cost','eficiencia','lean','procesos','compras','procurement','stock','inventario','coo'],
+ digital:['digital','ecommerce','online','web','app','marketplace','marketplaces','marketing','seo','sem','leads','trafico','omnicanal','contenido','social','plataforma','cmo'],
+ data_ai:['datos','data','ia','ai','inteligencia','artificial','analytics','analitica','bi','intelligence','dashboard','mando','machine','learning','algoritmo','prediccion','predictivo','automatizacion','rfm','reporting','cdo'],
+ tech:['tecnologia','tech','erp','sistemas','sistema','software','integracion','arquitectura','stack','ciberseguridad','cybersecurity','seguridad','infraestructura','cloud','navision','sap','cto','cio'],
+ finance:['finanzas','financiero','financiera','finance','cfo','fpa','presupuesto','budget','tesoreria','caja','cash','working','capital','circulante','refinanciacion','deuda','contabilidad','controller','contable','auditoria','economics','rentabilidad','margenes'],
+ talent:['talento','talent','personas','people','rrhh','hr','recruitment','reclutamiento','seleccion','contratar','equipo','organizacion','organizativo','cultura','cultural','compensacion','retribucion','chro','headhunting','sucesion'],
+ strategy:['estrategia','estrategico','strategy','vision','proposito','consejo','board','advisory','asesor','advisor','posicionamiento','diagnostico','ceo','presidente','chairman'],
+ ma:['adquisicion','adquisiciones','integracion','postmerger','pmi','buyandbuild','buildup','addon','diligence','deal','target','sinergias','fusion','carveout'],
+ esg:['esg','sostenibilidad','sustainability','sostenible','ambiental','medioambiental','huella','carbono','taxonomia','materialidad','gobernanza']
+};
+const ROLES={cfo:{a:'finance',cap:['finance','financial','cash','accounting','reporting','fpa','refinanc']},
+ coo:{a:'ops',cap:['operations','cost management','s&op','warehous','distribution']},
+ cto:{a:'tech',cap:['tech','erp','arquitect','cybersec']},
+ cio:{a:'tech',cap:['tech','erp','arquitect']},
+ cmo:{a:'digital',cap:['marketing','digital']},
+ cdo:{a:'data_ai',cap:['data','business intelligence']},
+ chro:{a:'talent',cap:['people','recruitment','talent','organizational']},
+ ceo:{a:'strategy',cap:['strategy','purpose','board']}};
+const SECT={industrial:'Industrials',industria:'Industrials',fabricante:'Industrials',manufactur:'Industrials',
+ consumo:'Consumer',retail:'Consumer',ecommerce:'Consumer',tienda:'Consumer',
+ salud:'Healthcare',sanitar:'Healthcare',farma:'Healthcare',veterinar:'Healthcare',
+ tecnolog:'Technology',software:'Technology',saas:'Technology',
+ agro:'Agribusiness',agricol:'Agribusiness',aliment:'Agribusiness',
+ servicios:'Business Services',distribu:'Distribuci',restaura:'Consumer Services'};
+function pSectors(p){
+ const own=(p.sectores||[]).slice();
+ (p.cos||[]).forEach(x=>{const c=companiesByExcel[x];if(c&&c.sector)own.push(c.sector)});
+ return own}
+const HINT={hands:['handson','hands','ejecucion','ejecutar','implantar','implantacion','implementar','operativo'],
+ advis:['advisory','asesor','consejo','board','consejero','sparring'],
+ interim:['interim','transicion','temporal','sustituir','provisional']};
+function qwords(s){return String(s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,' ').split(' ').filter(t=>t.length>1)}
+const STOP=['para','una','uno','con','que','del','las','los','por','como','the','and','muy','sus','este','esta','nos','necesito','buscamos','busco','alguien','perfil','persona','empresa','compania','participada','abac','proyecto','tema','ayuda','poder','hacer','sobre','desde','entre','cero'];
+function shortlist(q,n){
+ const terms=[...new Set(qwords(q).filter(t=>!STOP.includes(t)))];
+ const areasQ=[],capQ=[],sectQ=[];
+ for(const ent of Object.entries(SYN)){const aid=ent[0],words=ent[1];
+  if(terms.some(t=>words.some(w=>w===t||(t.length>4&&w.startsWith(t.slice(0,5)))||(w.length>4&&t.startsWith(w.slice(0,5))))))areasQ.push(aid)}
+ terms.forEach(t=>{const R=ROLES[t];if(R){if(!areasQ.includes(R.a))areasQ.push(R.a);capQ.push.apply(capQ,R.cap)}});
+ terms.forEach(t=>{for(const ent of Object.entries(SECT)){if(t.length>4&&t.startsWith(ent[0].slice(0,5))&&!sectQ.includes(ent[1]))sectQ.push(ent[1])}});
+ const wantHands=terms.some(t=>HINT.hands.includes(t)),wantAdv=terms.some(t=>HINT.advis.includes(t)),wantInt=terms.some(t=>HINT.interim.includes(t));
+ const scored=DATA.partners.map(p=>{
+  const caps=norm((p.capabilities||[]).join(' ')+' '+(p.tags||[]).join(' ')+' '+(p.casos||[]).join(' '));
+  const txt=norm([p.name,p.org,p.cargo,p.bio,(p.expertiseLegacy||[]).join(' '),(p.cos||[]).map(coName).join(' ')].join(' '));
+  const sec=norm(pSectors(p).join(' '));
+  const pa=p.areas||[];
+  let s=0;const hits=[];
+  areasQ.forEach(a=>{if(pa.includes(a)){s+=28;hits.push(AREA[a].short)}});
+  capQ.forEach(c=>{if(caps.indexOf(norm(c))>=0){s+=16;hits.push(c)}});
+  terms.forEach(t=>{if(t.length>3){if(caps.indexOf(t)>=0)s+=12;else if(txt.indexOf(t)>=0)s+=6}});
+  sectQ.forEach(v=>{if(sec.indexOf(norm(v))>=0){s+=14;hits.push(v)}});
+  const col=(p.collab||[]).join(' ');
+  if(wantHands&&col.indexOf('Hands On')>=0)s+=10;
+  if(wantAdv&&(col.indexOf('Hands Off')>=0||col.indexOf('Board')>=0))s+=10;
+  if(wantInt&&col.indexOf('Interim')>=0)s+=14;
+  if(s===0)return null;
+  s+=Math.min(9,(p.nprj||0)*1.2);
+  if(p.estado==='Active LTM')s+=5;
+  return {p:p,s:s,hits:[...new Set(hits)]}}).filter(Boolean).sort((a,b)=>b.s-a.s);
+ let list=scored;
+ if(list.length<6&&areasQ.length){
+  const extra=DATA.partners.filter(p=>!list.some(x=>x.p.key===p.key)&&(p.areas||[]).some(a=>areasQ.includes(a)))
+   .sort((a,b)=>b.nprj-a.nprj).slice(0,10-list.length).map(p=>({p:p,s:1,hits:[]}));
+  list=list.concat(extra)}
+ return {list:list.slice(0,n),terms:terms,areasQ:areasQ,capQ:capQ,sectQ:sectQ}}
+function engineName(){return hasCowork()?'Claude':gemKey()?'Gemini':'ranking local'}
 async function runRec(){
  const q=$('recQ').value.trim();if(!q)return;
  const out=$('recOut');const btn=$('recBtn');btn.disabled=true;
- out.innerHTML='<div class="muted" style="font-size:13px"><span class="spin"></span>Analizando el directorio…</div>';
- const compact=DATA.partners.map(p=>({k:p.key,n:p.name,estado:p.estado,rol:(p.role||[]).join('/'),areas:(p.areas||[]).map(a=>AREA[a].short),caps:(p.capabilities||[]).slice(0,8),tags:(p.tags||[]).filter(t=>!t.startsWith('fase:')).slice(0,10),sect:(p.sectores||[]).join(','),collab:(p.collab||[]).join('/'),org:p.org,exp:[...new Set(projsOfPartner(p.key).map(x=>coName(x.investee)))].join(','),nprj:projsOfPartner(p.key).length,casos:(p.casos||[]).join(',')}));
- const prompt=`Eres el motor de recomendación de Abac Fast Forward (private equity, España). Necesidad de la participada: "${q}".
-Del siguiente directorio JSON de operating partners, selecciona los 3-5 que mejor encajan. Prioriza: encaje de capability/área con la necesidad concreta > experiencia previa en participadas Abac (campo exp/nprj) > estado (Active LTM mejor que Prospect; Prospect vale si el encaje es muy bueno) > formato de colaboración compatible.
-Responde SOLO con JSON válido, sin markdown: {"recs":[{"k":"<key exacta del campo k>","fit":<0-100>,"why":"<1-2 frases, específicas a la necesidad, en español>"}],"gap":"<si ninguno cubre del todo la necesidad, explica el hueco en 1 frase; si está bien cubierta, cadena vacía>"}
-DIRECTORIO: ${JSON.stringify(compact)}`;
+ out.innerHTML='<div class="muted" style="font-size:13px"><span class="spin"></span>Analizando el directorio con '+engineName()+'…</div>';
+ const S=shortlist(q,26);const list=S.list;
+ const crit=[S.areasQ.map(a=>AREA[a].short).join(', '),S.sectQ.join(', ')].filter(Boolean).join(' · ');
+ const compact=list.map(x=>{const p=x.p;return {k:p.key,n:p.name,e:p.estado,r:(p.role||[]).join('/'),
+  a:(p.areas||[]).map(id=>AREA[id]?AREA[id].short:id).join(','),
+  c:(p.capabilities||[]).slice(0,6).join('; ')||undefined,
+  b:p.bio?p.bio.slice(0,170):undefined,
+  x:(p.cos||[]).map(coName).join(',')||undefined,
+  sec:[...new Set(pSectors(p))].slice(0,4).join(',')||undefined,
+  np:p.nprj||0,col:(p.collab||[]).join('/')||undefined,carg:p.cargo||undefined}});
+ const prompt='Eres el motor de recomendacion de operating partners de Abac Fast Forward (private equity, Espana).\n'
+  +'NECESIDAD: "'+q+'"\n\n'
+  +'CANDIDATOS preseleccionados del directorio. Campos: k=id, n=nombre, e=estado, r=rol, a=areas de expertise, c=capabilities etiquetadas, b=bio, x=participadas donde ya trabajo, sec=sectores (propios e inferidos de sus participadas), np=n proyectos, col=formatos de colaboracion, carg=cargo actual:\n'
+  +JSON.stringify(compact)+'\n\n'
+  +'Elige los 7 con MEJOR encaje, ordenados de mejor a peor. Criterios por orden: (1) las capabilities/areas etiquetadas cubren especificamente lo que se pide (si piden un CFO, deben tener capabilities de finanzas; no vale un perfil comercial con mucho track record); (2) el sector encaja; (3) el formato de colaboracion es compatible (hands-on / advisory / interim / full-time); (4) experiencia previa en participadas Abac; (5) estado (Active LTM preferible; Prospect vale si el encaje es mejor).\n'
+  +'NUNCA recomiendes a alguien con encaje tematico debil solo porque tenga muchos proyectos. Si no hay 7 perfiles con encaje razonable, devuelve menos y explicalo en "gap".\n'
+  +'En "why" cita la capability, el sector o el proyecto concreto que justifica el encaje.\n'
+  +'Responde SOLO JSON valido, sin markdown: {"recs":[{"k":"<k exacta>","fit":<0-100>,"why":"<1-2 frases en espanol>"}],"gap":"<hueco del directorio en 1 frase, o cadena vacia>"}';
+ const head='<div class="row" style="margin-bottom:10px;gap:8px"><span class="pill" style="background:#E7F6EE;color:#1F7A4D;margin:0">'+esc(engineName())+'</span><span class="muted" style="font-size:11.5px">'+list.length+' candidatos filtrados por etiquetas'+(crit?' · criterios detectados: '+esc(crit):'')+'</span></div>';
  try{
   const r=await askEngine(prompt);
-  let txt=typeof r==='string'?r:(r&&(r.text||r.content&&r.content[0]&&r.content[0].text))||JSON.stringify(r);
+  let txt=typeof r==='string'?r:(r&&(r.text||(r.content&&r.content[0]&&r.content[0].text)))||JSON.stringify(r);
   const m=txt.match(/\{[\s\S]*\}/);const j=JSON.parse(m?m[0]:txt);
-  const recs=(j.recs||[]).map(x=>({...x,p:partnersByKey[x.k]||DATA.partners.find(p=>norm(p.name)===norm(x.k))})).filter(x=>x.p);
-  out.innerHTML=(recs.map((x,i)=>`
+  const byk={};list.forEach(x=>byk[x.p.key]=x.p);
+  const recs=(j.recs||[]).map(x=>Object.assign({},x,{p:byk[x.k]||partnersByKey[x.k]||DATA.partners.find(p=>norm(p.name)===norm(x.k))})).filter(x=>x.p);
+  out.innerHTML=head+(recs.map((x,i)=>`
    <div class="rec ${i===0?'top':''}">
     <div class="row" style="gap:11px">
      <div class="rank ${i===0?'g':''}">${i+1}</div>
      <div style="min-width:0;flex:1">
       <div class="between"><span class="link" style="font-size:14.5px" onclick="openPartner('${x.p.key}')">${esc(x.p.name)}</span>${estBadge(x.p.estado)}</div>
       <div style="margin:5px 0 7px">${areaPills(x.p.areas,4)}</div>
-      <div style="font-size:12.5px;color:#4A5568;line-height:1.55">${esc(x.why)}</div>
+      <div style="font-size:12.5px;color:#3C4956;line-height:1.6">${esc(x.why)}</div>
+      ${(x.p.capabilities||[]).length?`<div class="muted" style="font-size:11px;margin-top:6px">${x.p.capabilities.slice(0,3).map(esc).join(' · ')}</div>`:''}
+      ${x.p.nprj?`<div class="muted" style="font-size:11px;margin-top:3px">${x.p.nprj} proyectos FF${(x.p.cos||[]).length?' · '+x.p.cos.map(coName).map(esc).join(', '):''}</div>`:''}
       <div class="row" style="margin-top:8px;gap:10px"><div class="bar"><i style="width:${Math.max(5,Math.min(100,x.fit))}%"></i></div><span class="fitn">${x.fit}</span></div>
      </div>
     </div>
-   </div>`).join('')||'<div class="muted">La IA no ha devuelto recomendaciones. Prueba a reformular.</div>')
+   </div>`).join('')||'<div class="muted">Sin recomendaciones. Prueba a reformular la necesidad.</div>')
   +(j.gap?`<div class="note"><b>Gap del directorio:</b> ${esc(j.gap)}</div>`:'')
   +`<div class="row" style="margin-top:14px"><button class="btn ghost mini" onclick="extSearch()">Buscar perfiles externos (prepara prompt para el chat)</button></div><div id="extOut" style="margin-top:10px"></div>`;
  }catch(e){
-  console.error('askClaude failed',e);
-  /* fallback: scoring local por keywords */
-  const qw=norm(q).match(/[a-z0-9]{3,}/g)||[];
-  const scored=DATA.partners.map(p=>{const hay=norm([p.name,(p.capabilities||[]).join(' '),(p.tags||[]).join(' '),(p.areas||[]).map(a=>AREA[a].name).join(' '),(p.sectores||[]).join(' '),(p.casos||[]).join(' ')].join(' '));
-   let s=qw.reduce((acc,w)=>acc+(hay.indexOf(w)>=0?18:0),0);s+=Math.min(20,projsOfPartner(p.key).length*2);if(p.estado==='Active LTM')s+=10;return{p,s}})
-   .filter(x=>x.s>15).sort((a,b)=>b.s-a.s).slice(0,5);
-  const why=(!hasCowork()&&!gemKey())?'Para activar recomendaciones con IA fuera de Cowork, configura una API key gratuita de Gemini (recuadro inferior). Mientras tanto, ranking local por palabras clave.':'El motor de IA no ha respondido — ranking local por palabras clave.';
-  out.innerHTML=`<div class="note">${why}</div>`+
-   scored.map((x,i)=>`<div class="rec ${i===0?'top':''}"><div class="row" style="gap:11px"><div class="rank ${i===0?'g':''}">${i+1}</div>
+  console.error('askEngine failed',e);
+  const why=(e&&e.message==='no-engine')?'Sin motor de IA configurado — ranking por etiquetas. Anade una API key de Gemini abajo para activar la IA.':'El motor de IA no ha respondido ('+((e&&e.message)||'error')+') — ranking por etiquetas.';
+  out.innerHTML=head+`<div class="note" style="margin-top:0;margin-bottom:12px">${why}</div>`+
+   list.slice(0,7).map((x,i)=>`<div class="rec ${i===0?'top':''}"><div class="row" style="gap:11px"><div class="rank ${i===0?'g':''}">${i+1}</div>
     <div style="flex:1"><div class="between"><span class="link" style="font-size:14.5px" onclick="openPartner('${x.p.key}')">${esc(x.p.name)}</span>${estBadge(x.p.estado)}</div>
-    <div style="margin-top:5px">${areaPills(x.p.areas,4)}</div></div></div></div>`).join('')
+    <div style="margin-top:5px">${areaPills(x.p.areas,4)}</div>
+    ${x.hits&&x.hits.length?`<div style="font-size:11.5px;color:#0E7A8A;margin-top:6px">Coincide en: ${x.hits.slice(0,4).map(esc).join(' · ')}</div>`:''}
+    ${(x.p.capabilities||[]).length?`<div class="muted" style="font-size:11px;margin-top:4px">${x.p.capabilities.slice(0,3).map(esc).join(' · ')}</div>`:''}
+    ${x.p.nprj?`<div class="muted" style="font-size:11px;margin-top:3px">${x.p.nprj} proyectos FF${(x.p.cos||[]).length?' · '+x.p.cos.map(coName).map(esc).join(', '):''}</div>`:''}
+    </div></div></div>`).join('')
    +`<div class="row" style="margin-top:14px"><button class="btn ghost mini" onclick="extSearch()">Buscar perfiles externos (prepara prompt para el chat)</button></div><div id="extOut" style="margin-top:10px"></div>`;
  }
  btn.disabled=false;
