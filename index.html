@@ -753,7 +753,7 @@ function renderRec(opts){
   <div class="card">
    <textarea id="recQ" rows="3" placeholder="Ej: Necesito alguien para implantar pricing dinámico con IA en Motocard, hands-on, con experiencia en retail online…">${esc(opts&&opts.q||'')}</textarea>
    <div class="row" style="margin-top:10px"><button class="btn" id="recBtn" onclick="runRec()">Recomendar partners</button>
-   <span class="muted" style="font-size:12px">Usa el directorio completo (${DATA.partners.length} perfiles) con áreas, capabilities y tags</span></div>
+   <span class="muted" style="font-size:12px">Filtra los ${DATA.partners.length} perfiles por áreas, capabilities, sector y formato de colaboración</span></div>
    <div id="recOut" style="margin-top:16px"></div>
   </div>
   <div>
@@ -910,7 +910,13 @@ async function runRec(){
   +`<div class="row" style="margin-top:14px"><button class="btn ghost mini" onclick="extSearch()">Buscar perfiles externos (prepara prompt para el chat)</button></div><div id="extOut" style="margin-top:10px"></div>`;
  }catch(e){
   console.error('askEngine failed',e);
-  const why=(e&&e.message==='no-engine')?'Sin motor de IA configurado — ranking por etiquetas. Anade una API key de Gemini abajo para activar la IA.':'El motor de IA no ha respondido ('+((e&&e.message)||'error')+') — ranking por etiquetas.';
+  const msg=(e&&e.message)||'error';
+  let why;
+  if(msg==='no-engine')why='Sin motor de IA configurado — ranking por etiquetas. Anade una API key de Gemini en el recuadro inferior para activar la IA.';
+  else if(msg.indexOf('401')>=0)why='<b>Clave de Gemini no valida (401).</b> Vuelve a copiarla con el boton de copiar de <a href="https://aistudio.google.com/apikey" target="_blank">aistudio.google.com/apikey</a> (no selecciones el texto oculto de la tabla) y guardala de nuevo. Si persiste, crea una clave nueva desde ese mismo sitio. Mientras tanto: ranking por etiquetas.';
+  else if(msg.indexOf('403')>=0)why='<b>Clave rechazada (403).</b> Suele deberse a restricciones de la clave por dominio: al abrir el archivo en local no se envia dominio, asi que la clave debe estar sin restricciones (o usarse desde el dominio autorizado). Mientras tanto: ranking por etiquetas.';
+  else if(msg.indexOf('429')>=0)why='<b>Cuota agotada (429).</b> Se ha superado el limite gratuito de Gemini (se reinicia cada dia). Mientras tanto: ranking por etiquetas.';
+  else why='El motor de IA no ha respondido ('+msg+') — ranking por etiquetas.';
   out.innerHTML=head+`<div class="note" style="margin-top:0;margin-bottom:12px">${why}</div>`+
    list.slice(0,7).map((x,i)=>`<div class="rec ${i===0?'top':''}"><div class="row" style="gap:11px"><div class="rank ${i===0?'g':''}">${i+1}</div>
     <div style="flex:1"><div class="between"><span class="link" style="font-size:14.5px" onclick="openPartner('${x.p.key}')">${esc(x.p.name)}</span>${estBadge(x.p.estado)}</div>
